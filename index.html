@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Lunchbox Rush Playtest</title>
+<meta name="description" content="Play the Lunchbox Rush prototype in your browser and tell us how it felt.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Figtree:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Public copy of Tools/TesterPage (the claude.ai page): same look, but run stats live in this
+   browser and feedback goes to the owner's Google Form. */
+:root {
+  --bg: #f2f4ee;          /* rice paper, leaning green */
+  --surface: #ffffff;
+  --sunken: #e6eae1;
+  --ink: #1b2a24;          /* nori ink */
+  --muted: #5b6a62;
+  --line: #d3dacd;
+  --accent: #e3a21a;       /* mustard */
+  --accent-ink: #8a5a00;   /* mustard dark enough for text on light */
+  --plum: #b8325c;         /* pickled plum: fails, warnings */
+  --leaf: #2f8a57;         /* wins */
+  --on-accent: #241a03;
+  --frame: #1b2a24;
+  --font-display: "Baloo 2", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --radius: 14px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111915; --surface: #18231e; --sunken: #0c120f; --ink: #e6ede8; --muted: #9aaba2;
+    --line: #2a3832; --accent: #f2b93f; --accent-ink: #f2b93f; --plum: #f06d93; --leaf: #5cc88a;
+    --on-accent: #241a03; --frame: #050806; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111915; --surface: #18231e; --sunken: #0c120f; --ink: #e6ede8; --muted: #9aaba2;
+  --line: #2a3832; --accent: #f2b93f; --accent-ink: #f2b93f; --plum: #f06d93; --leaf: #5cc88a;
+  --on-accent: #241a03; --frame: #050806; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+
+header { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+h1, h2 { font-family: var(--font-display); line-height: 1.1; margin: 0; text-wrap: balance; }
+h1 { font-size: clamp(30px, 5vw, 44px); font-weight: 800; letter-spacing: -0.01em; }
+h1 .tag { color: var(--accent-ink); }
+h2 { font-size: 22px; font-weight: 700; }
+.sub { color: var(--muted); margin: 4px 0 0; }
+.build { font-family: var(--font-mono); font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+
+.play { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 32px; align-items: start; }
+@media (max-width: 820px) { .play { grid-template-columns: minmax(0, 1fr); gap: 24px; } }
+
+/* Game frame */
+.device {
+  position: relative; background: var(--frame); border-radius: 30px; padding: 10px;
+  box-shadow: 0 18px 40px -18px rgba(0,0,0,.45);
+  height: min(80vh, 800px); aspect-ratio: 9 / 19.5; max-width: 100%;
+}
+@media (max-width: 820px) { .device { width: 100%; height: auto; aspect-ratio: auto; height: 84svh; border-radius: 22px; padding: 6px; } }
+.screen { position: relative; width: 100%; height: 100%; border-radius: 22px; overflow: hidden; background: #2b3a33; }
+@media (max-width: 820px) { .screen { border-radius: 17px; } }
+#unity-canvas { display: block; width: 100%; height: 100%; touch-action: none; outline: none; }
+.loader {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  background: radial-gradient(120% 80% at 50% 30%, #35493f, #1b2a24); color: #eef3ef; text-align: center; padding: 24px;
+}
+.loader strong { font-family: var(--font-display); font-size: 26px; font-weight: 800; }
+.loader p { margin: 0; color: #b9c8bf; max-width: 26ch; }
+.bar { width: 70%; max-width: 220px; height: 10px; border-radius: 999px; background: rgba(255,255,255,.14); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: #f2b93f; border-radius: inherit; transition: width .2s; }
+.loader.error p { color: #ffc2d2; }
+
+/* Side panel */
+.side { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; max-width: 60ch; }
+.steps li::marker { font-family: var(--font-display); font-weight: 800; color: var(--accent-ink); }
+
+.run-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.now { font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 460px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.stat { background: var(--sunken); border-radius: 10px; padding: 10px 12px; }
+.stat b { display: block; font-family: var(--font-display); font-size: 26px; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.levels { display: grid; grid-template-columns: repeat(15, minmax(0, 1fr)); gap: 4px; }
+.lv { aspect-ratio: 1; border-radius: 5px; background: var(--sunken); display: grid; place-items: center; font-family: var(--font-mono); font-size: 10px; color: var(--muted); }
+.lv.won { background: var(--leaf); color: #fff; }
+.lv.lost { background: var(--plum); color: #fff; }
+.lv.now { outline: 2px solid var(--accent); outline-offset: 1px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+/* Form */
+form { display: flex; flex-direction: column; gap: 16px; }
+fieldset { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+legend, label.q { font-weight: 600; padding: 0; }
+.choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.choices input { position: absolute; opacity: 0; pointer-events: none; }
+.choices label {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 14px; cursor: pointer;
+  font-weight: 500; user-select: none; transition: background .12s, border-color .12s;
+}
+.choices label:hover { border-color: var(--muted); }
+.choices input:checked + label { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
+.choices input:focus-visible + label { outline: 2px solid var(--ink); outline-offset: 2px; }
+.stars label { min-width: 44px; text-align: center; font-family: var(--font-display); font-weight: 800; font-size: 17px; padding: 4px 12px; }
+.hint { font-size: 13px; color: var(--muted); margin: 0; }
+textarea {
+  width: 100%; min-height: 74px; resize: vertical; font: inherit; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+}
+textarea:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.send { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+button {
+  font: inherit; font-weight: 700; border: 0; border-radius: 999px; padding: 11px 22px; cursor: pointer;
+  background: var(--ink); color: var(--bg);
+}
+button:disabled { opacity: .45; cursor: not-allowed; }
+.status { font-size: 14px; color: var(--muted); }
+.status.ok { color: var(--leaf); font-weight: 600; }
+.status.bad { color: var(--plum); font-weight: 600; }
+.notice { background: var(--sunken); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin: 0; }
+footer { color: var(--muted); font-size: 13px; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Lunchbox Rush <span class="tag">playtest</span></h1>
+      <p class="sub">Help Chef Cat pack lunches. Play a few levels, then tell us how it felt.</p>
+    </div>
+    <span class="build">Prototype · 30 levels · 3 art skins</span>
+  </header>
+
+  <section class="play">
+    <div class="device">
+      <div class="screen">
+        <canvas id="unity-canvas" tabindex="-1" aria-label="Lunchbox Rush game"></canvas>
+        <div class="loader" id="loader">
+          <strong>Lunchbox Rush</strong>
+          <div class="bar"><i id="bar"></i></div>
+          <p id="loader-text">Packing the lunchboxes…</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card">
+        <h2>How to play</h2>
+        <ol class="steps">
+          <li>Tap the top item of a stack. It flies to a lunchbox that needs it, or waits on the bench.</li>
+          <li>Fill the boxes before the 5-slot bench overflows. Undo and +1 slot help when you're stuck.</li>
+          <li>Try the Skin button, play as far as you like, then send your thoughts below.</li>
+        </ol>
+      </div>
+
+      <div class="card" aria-live="polite">
+        <div class="run-head">
+          <h2>Your run</h2>
+          <span class="now" id="now">Game loading</span>
+        </div>
+        <div class="stats">
+          <div class="stat"><b id="s-furthest">0</b><span>Furthest level</span></div>
+          <div class="stat"><b id="s-wins">0</b><span>Levels won</span></div>
+          <div class="stat"><b id="s-fails">0</b><span>Fails</span></div>
+          <div class="stat"><b id="s-time">0m</b><span>Played</span></div>
+        </div>
+        <div class="levels" id="levels" aria-label="Levels won and failed"></div>
+        <div class="legend"><span><i style="background:var(--leaf)"></i>Won</span><span><i style="background:var(--plum)"></i>Failed, not won yet</span><span><i style="background:var(--sunken)"></i>Not played</span></div>
+      </div>
+
+      <div class="card">
+        <h2>Send feedback</h2>
+        <p class="notice" id="form-note" hidden></p>
+        <form id="feedback" novalidate>
+          <fieldset>
+            <legend>How fun was it?</legend>
+            <div class="choices stars">
+              <input type="radio" name="rating" id="r1" value="1"><label for="r1">1</label>
+              <input type="radio" name="rating" id="r2" value="2"><label for="r2">2</label>
+              <input type="radio" name="rating" id="r3" value="3"><label for="r3">3</label>
+              <input type="radio" name="rating" id="r4" value="4"><label for="r4">4</label>
+              <input type="radio" name="rating" id="r5" value="5"><label for="r5">5</label>
+            </div>
+            <p class="hint">1 = I'd stop now, 5 = I'd keep playing.</p>
+          </fieldset>
+          <fieldset>
+            <legend>Difficulty so far</legend>
+            <div class="choices">
+              <input type="radio" name="difficulty" id="d-easy" value="Too easy"><label for="d-easy">Too easy</label>
+              <input type="radio" name="difficulty" id="d-right" value="About right"><label for="d-right">About right</label>
+              <input type="radio" name="difficulty" id="d-hard" value="Too hard"><label for="d-hard">Too hard</label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <legend>Favourite art skin</legend>
+            <div class="choices">
+              <input type="radio" name="skin" id="k-food" value="Food"><label for="k-food">Food</label>
+              <input type="radio" name="skin" id="k-yarn" value="Yarn"><label for="k-yarn">Yarn</label>
+              <input type="radio" name="skin" id="k-pixel" value="Pixel"><label for="k-pixel">Pixel</label>
+              <input type="radio" name="skin" id="k-none" value="Didn't try"><label for="k-none">Didn't try</label>
+            </div>
+          </fieldset>
+          <fieldset>
+            <label class="q" for="fun">What did you enjoy?</label>
+            <textarea id="fun" maxlength="1500"></textarea>
+          </fieldset>
+          <fieldset>
+            <label class="q" for="stuck">Where did you get stuck, bored or confused?</label>
+            <textarea id="stuck" maxlength="1500"></textarea>
+          </fieldset>
+          <fieldset>
+            <label class="q" for="bugs">Bugs or anything that looked wrong</label>
+            <textarea id="bugs" maxlength="1500" placeholder="Which level, what you tapped, what happened"></textarea>
+          </fieldset>
+          <div class="send">
+            <button type="submit" id="send">Send feedback</button>
+            <span class="status" id="send-status">Your level stats are sent along with it. No name or email needed.</span>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+  <footer>Your progress on this page is kept in this browser only. Feedback is sent anonymously to the Lunchbox Rush team.</footer>
+</div>
+
+<script>
+// Google Form that receives the feedback. Field ids come from the form's public page
+// (Tools/PublicPlaytest/README.md says how to fill these in).
+const FORM = {
+  action: "",   // https://docs.google.com/forms/d/e/<id>/formResponse
+  fields: {
+    rating: "", difficulty: "", skin: "", enjoyed: "", stuck: "", bugs: "",
+    furthest: "", wins: "", fails: "", minutes: "", level: "", details: "", device: "", tester: "",
+  },
+};
+
+(() => {
+  const LEVEL_COUNT = 30;
+  const STORE = "lunchbox-playtest-run";
+  const $ = (id) => document.getElementById(id);
+
+  // ---------- this tester's run, kept in this browser ----------
+  const run = { levels: {}, furthest: 0, skin: null, seconds: 0, sent: 0, tester: null };
+  try { Object.assign(run, JSON.parse(localStorage.getItem(STORE) || "{}")); } catch {}
+  if (!run.tester) run.tester = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2)).slice(0, 8);
+  const save = () => { try { localStorage.setItem(STORE, JSON.stringify(run)); } catch {} };
+  save();
+
+  let current = null;              // level being played
+  let attempt = { seconds: 0, undos: 0, slots: 0 };   // already counted for this attempt
+
+  function levelRec(n) {
+    return run.levels[n] ??= { won: 0, lost: 0, bestTaps: null, seconds: 0, undos: 0, slots: 0 };
+  }
+
+  window.addEventListener("lunchbox", (e) => {
+    const ev = e.detail || {};
+    if (ev.type === "level_start") {
+      current = ev.level; run.skin = ev.skin || run.skin;
+      attempt = { seconds: 0, undos: 0, slots: 0 };
+      renderRun();
+    } else if (ev.type === "skin") {
+      run.skin = ev.skin; renderRun(); save();
+    } else if (ev.type === "level_end") {
+      // A lost level can continue (+1 slot) and later be won: counters are per attempt, so add the difference.
+      const r = levelRec(String(ev.level));
+      if (ev.result === "won") {
+        r.won++;
+        r.bestTaps = r.bestTaps == null ? ev.taps : Math.min(r.bestTaps, ev.taps);
+        run.furthest = Math.max(run.furthest, ev.level);
+      } else {
+        r.lost++;   // "lost" (bench full) or "timeout" (lunch bell)
+      }
+      const dSec = Math.max(0, (ev.seconds || 0) - attempt.seconds);
+      r.seconds += dSec; run.seconds += dSec;
+      r.undos += Math.max(0, (ev.undos || 0) - attempt.undos);
+      r.slots += Math.max(0, (ev.slotsAdded || 0) - attempt.slots);
+      attempt = { seconds: ev.seconds || 0, undos: ev.undos || 0, slots: ev.slotsAdded || 0 };
+      renderRun(); save();
+    }
+  });
+
+  function totals() {
+    let wins = 0, fails = 0;
+    for (const r of Object.values(run.levels)) { wins += r.won > 0 ? 1 : 0; fails += r.lost || 0; }
+    return { wins, fails };
+  }
+
+  function renderRun() {
+    const t = totals();
+    $("s-furthest").textContent = run.furthest;
+    $("s-wins").textContent = t.wins;
+    $("s-fails").textContent = t.fails;
+    const m = Math.floor(run.seconds / 60);
+    $("s-time").textContent = m < 60 ? m + "m" : Math.floor(m / 60) + "h " + (m % 60) + "m";
+    $("now").textContent = current ? `Playing level ${current}${run.skin ? " · " + run.skin + " skin" : ""}` : "Game loading";
+    const cells = $("levels").children;
+    for (let i = 1; i <= LEVEL_COUNT; i++) {
+      const r = run.levels[i], c = cells[i - 1];
+      c.className = "lv" + (r && r.won ? " won" : r && r.lost ? " lost" : "") + (i === current ? " now" : "");
+    }
+  }
+  for (let i = 1; i <= LEVEL_COUNT; i++) {
+    const c = document.createElement("div"); c.className = "lv"; c.textContent = i; $("levels").appendChild(c);
+  }
+
+  function deviceLabel() {
+    const ua = navigator.userAgent;
+    const os = /Android/i.test(ua) ? "Android" : /iPhone|iPad|iPod/i.test(ua) ? "iOS" : /Windows/i.test(ua) ? "Windows"
+      : /Mac OS X/i.test(ua) ? "macOS" : /Linux/i.test(ua) ? "Linux" : "Other";
+    const br = /Edg\//.test(ua) ? "Edge" : /Firefox\//.test(ua) ? "Firefox" : /Chrome\//.test(ua) ? "Chrome" : /Safari\//.test(ua) ? "Safari" : "Browser";
+    const phone = /Mobi|iPhone|Android/i.test(ua);
+    return `${os} ${phone ? "phone" : "computer"} · ${br} · ${screen.width}×${screen.height}`;
+  }
+
+  // One line per played level: "3: won 1, lost 2, 41s, best 18 taps, undo 1, +slot 1"
+  function levelDetails() {
+    return Object.keys(run.levels).map(Number).sort((a, b) => a - b).map((n) => {
+      const r = run.levels[n];
+      const parts = [`won ${r.won}`, `lost ${r.lost}`, `${Math.round(r.seconds)}s`];
+      if (r.bestTaps != null) parts.push(`best ${r.bestTaps} taps`);
+      if (r.undos) parts.push(`undo ${r.undos}`);
+      if (r.slots) parts.push(`+slot ${r.slots}`);
+      return `${n}: ${parts.join(", ")}`;
+    }).join("\n");
+  }
+
+  // ---------- feedback form -> Google Form ----------
+  const connected = FORM.action && Object.values(FORM.fields).every(Boolean);
+  if (!connected) {
+    $("form-note").textContent = "The feedback form isn't connected yet. You can still play.";
+    $("form-note").hidden = false; $("send").disabled = true;
+  }
+
+  $("feedback").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.target;
+    const pick = (name) => (f.querySelector(`input[name="${name}"]:checked`) || {}).value || "";
+    const t = totals();
+    const answers = {
+      rating: pick("rating"), difficulty: pick("difficulty"), skin: pick("skin"),
+      enjoyed: $("fun").value.trim(), stuck: $("stuck").value.trim(), bugs: $("bugs").value.trim(),
+      furthest: String(run.furthest), wins: String(t.wins), fails: String(t.fails),
+      minutes: String(Math.round(run.seconds / 6) / 10), level: current ? String(current) : "",
+      details: levelDetails(), device: deviceLabel(), tester: run.tester,
+    };
+    const status = $("send-status");
+    if (!answers.rating && !answers.difficulty && !answers.enjoyed && !answers.stuck && !answers.bugs) {
+      status.className = "status bad"; status.textContent = "Pick a rating or write a line first."; return;
+    }
+    if (!connected) return;
+    const data = new URLSearchParams();
+    for (const [key, entry] of Object.entries(FORM.fields)) data.append(entry, answers[key]);
+    $("send").disabled = true; status.className = "status"; status.textContent = "Sending…";
+    try {
+      // Google Forms doesn't allow reading the reply from another site; a completed request means it arrived.
+      await fetch(FORM.action, { method: "POST", mode: "no-cors", body: data });
+      run.sent++; save(); f.reset();
+      status.className = "status ok"; status.textContent = `Sent. Thank you! (${run.sent} sent from this browser)`;
+    } catch {
+      status.className = "status bad"; status.textContent = "Couldn't send. Check your connection and try again.";
+    }
+    $("send").disabled = false;
+  });
+
+  // ---------- game ----------
+  function startGame() {
+    const canvas = $("unity-canvas"), loader = $("loader");
+    const fail = (msg) => {
+      loader.classList.add("error"); loader.hidden = false;
+      $("loader-text").textContent = msg;
+    };
+    const script = document.createElement("script");
+    script.src = "Build/Web.loader.js";
+    script.onerror = () => fail("The game files didn't load. Reload the page to try again.");
+    script.onload = () => {
+      createUnityInstance(canvas, {
+        dataUrl: "Build/Web.data.unityweb",
+        frameworkUrl: "Build/Web.framework.js.unityweb",
+        codeUrl: "Build/Web.wasm.unityweb",
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "IICT", productName: "Lunchbox Rush", productVersion: "0.1",
+        devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+        showBanner: (msg, type) => { if (type === "error") console.error("[unity]", msg); else console.warn("[unity]", msg); },
+      }, (p) => {
+        $("bar").style.width = Math.round(p * 100) + "%";
+        $("loader-text").textContent = p < 0.9 ? "Packing the lunchboxes…" : "Starting the food truck…";
+      }).then(() => { loader.hidden = true; })
+        .catch((err) => { console.error(err); fail("This browser couldn't start the game. Try Chrome, Edge or Safari on a recent phone or computer."); });
+    };
+    document.body.appendChild(script);
+  }
+
+  renderRun();
+  startGame();
+})();
+</script>
+</body>
+</html>

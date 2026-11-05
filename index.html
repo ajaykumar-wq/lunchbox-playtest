@@ -136,6 +136,25 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .status.ok { color: var(--leaf); font-weight: 600; }
 .status.bad { color: var(--plum); font-weight: 600; }
 .notice { background: var(--sunken); border-radius: 10px; padding: 10px 12px; font-size: 14px; margin: 0; }
+.copy-box { min-height: 160px; font-family: var(--font-mono); font-size: 12px; }
+
+/* "Send feedback" shortcut: on phones the game fills the screen and swallows scrolling */
+.jump {
+  display: inline-flex; align-items: center; gap: 6px; font-weight: 700; text-decoration: none;
+  background: var(--accent); color: var(--on-accent); border-radius: 999px; padding: 8px 16px; white-space: nowrap;
+}
+.jump:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* Shown over the game when level 30 is won */
+.done {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; padding: 24px; text-align: center; color: #eef3ef;
+  background: radial-gradient(120% 80% at 50% 30%, rgba(53,73,63,.97), rgba(27,42,36,.97));
+}
+.done strong { font-family: var(--font-display); font-size: 30px; font-weight: 800; line-height: 1.1; }
+.done p { margin: 0; color: #c9d6ce; max-width: 28ch; }
+.done .jump { font-size: 17px; padding: 12px 24px; }
+.done button { background: transparent; color: #eef3ef; border: 1px solid rgba(255,255,255,.35); }
 footer { color: var(--muted); font-size: 13px; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -148,7 +167,7 @@ footer { color: var(--muted); font-size: 13px; }
       <h1>Lunchbox Rush <span class="tag">playtest</span></h1>
       <p class="sub">Help Chef Cat pack lunches. Play a few levels, then tell us how it felt.</p>
     </div>
-    <span class="build">Prototype · 30 levels · 3 art skins</span>
+    <a class="jump" href="#send-feedback">Send feedback ↓</a>
   </header>
 
   <section class="play">
@@ -159,6 +178,12 @@ footer { color: var(--muted); font-size: 13px; }
           <strong>Lunchbox Rush</strong>
           <div class="bar"><i id="bar"></i></div>
           <p id="loader-text">Packing the lunchboxes…</p>
+        </div>
+        <div class="done" id="done" hidden>
+          <strong>All 30 levels done!</strong>
+          <p>Thank you for playing the whole prototype. How did it feel?</p>
+          <a class="jump" href="#send-feedback" id="done-send">Send feedback ↓</a>
+          <button type="button" id="done-close">Keep playing</button>
         </div>
       </div>
     </div>
@@ -188,7 +213,7 @@ footer { color: var(--muted); font-size: 13px; }
         <div class="legend"><span><i style="background:var(--leaf)"></i>Won</span><span><i style="background:var(--plum)"></i>Failed, not won yet</span><span><i style="background:var(--sunken)"></i>Not played</span></div>
       </div>
 
-      <div class="card">
+      <div class="card" id="send-feedback">
         <h2>Send feedback</h2>
         <p class="notice" id="form-note" hidden></p>
         <form id="feedback" novalidate>
@@ -236,11 +261,15 @@ footer { color: var(--muted); font-size: 13px; }
             <button type="submit" id="send">Send feedback</button>
             <span class="status" id="send-status">Your level stats are sent along with it. No name or email needed.</span>
           </div>
+          <fieldset id="copy-wrap" hidden>
+            <label class="q" for="copy-box">Your feedback, ready to paste</label>
+            <textarea id="copy-box" class="copy-box" readonly></textarea>
+          </fieldset>
         </form>
       </div>
     </div>
   </section>
-  <footer>Your progress on this page is kept in this browser only. Feedback is sent anonymously to the Lunchbox Rush team.</footer>
+  <footer>Your progress on this page is kept in this browser only. Feedback goes only to the Lunchbox Rush team, and no name or email is needed.</footer>
 </div>
 
 <script>
@@ -288,6 +317,8 @@ const FORM = {
         r.won++;
         r.bestTaps = r.bestTaps == null ? ev.taps : Math.min(r.bestTaps, ev.taps);
         run.furthest = Math.max(run.furthest, ev.level);
+        // The game wraps back to level 1 after the last level: say so, and point at the form.
+        if (ev.level >= LEVEL_COUNT) $("done").hidden = false;
       } else {
         r.lost++;   // "lost" (bench full) or "timeout" (lunch bell)
       }
@@ -345,11 +376,39 @@ const FORM = {
     }).join("\n");
   }
 
-  // ---------- feedback form -> Google Form ----------
+  $("done-close").addEventListener("click", () => { $("done").hidden = true; });
+  $("done-send").addEventListener("click", () => { $("done").hidden = true; });
+
+  // ---------- feedback form -> Google Form (or, until it's connected, share / copy) ----------
   const connected = FORM.action && Object.values(FORM.fields).every(Boolean);
   if (!connected) {
-    $("form-note").textContent = "The feedback form isn't connected yet. You can still play.";
-    $("form-note").hidden = false; $("send").disabled = true;
+    $("form-note").textContent = "Fill this in, then tap Send. Your phone's share menu opens (WhatsApp, email…): " +
+      "send it to the person who gave you this link. On a computer, the text is copied for you to paste.";
+    $("form-note").hidden = false;
+  }
+
+  // Plain-text version of the feedback, for sharing by hand.
+  function feedbackText(a) {
+    const lines = ["Lunchbox Rush playtest feedback"];
+    if (a.rating) lines.push(`Fun: ${a.rating}/5`);
+    if (a.difficulty) lines.push(`Difficulty: ${a.difficulty}`);
+    if (a.skin) lines.push(`Favourite skin: ${a.skin}`);
+    if (a.enjoyed) lines.push(`Enjoyed: ${a.enjoyed}`);
+    if (a.stuck) lines.push(`Stuck / bored / confused: ${a.stuck}`);
+    if (a.bugs) lines.push(`Bugs: ${a.bugs}`);
+    lines.push("", `Furthest level ${a.furthest} · ${a.wins} levels won · ${a.fails} fails · ${a.minutes} min played`);
+    lines.push(`Device: ${a.device} · tester ${a.tester}`);
+    if (a.details) lines.push("", "Per level:", a.details);
+    return lines.join("\n");
+  }
+
+  async function shareByHand(text, status) {
+    if (navigator.share) {
+      try { await navigator.share({ title: "Lunchbox Rush feedback", text }); return "shared"; }
+      catch (err) { if (err && err.name === "AbortError") return "cancelled"; }
+    }
+    try { await navigator.clipboard.writeText(text); return "copied"; } catch {}
+    return "manual";
   }
 
   $("feedback").addEventListener("submit", async (e) => {
@@ -368,7 +427,28 @@ const FORM = {
     if (!answers.rating && !answers.difficulty && !answers.enjoyed && !answers.stuck && !answers.bugs) {
       status.className = "status bad"; status.textContent = "Pick a rating or write a line first."; return;
     }
-    if (!connected) return;
+    if (!connected) {
+      const text = feedbackText(answers);
+      $("copy-box").value = text;
+      const how = await shareByHand(text, status);
+      if (how === "cancelled") {
+        status.className = "status"; status.textContent = "Not sent. Tap Send again when you're ready.";
+        return;
+      }
+      run.sent++; save();
+      $("copy-wrap").hidden = how === "shared";
+      if (how === "shared") {
+        status.className = "status ok"; status.textContent = "Thank you! Your feedback is on its way.";
+      } else if (how === "copied") {
+        status.className = "status ok";
+        status.textContent = "Copied! Paste it into WhatsApp or an email to the person who gave you this link.";
+      } else {
+        status.className = "status ok";
+        status.textContent = "Copy the text below and send it to the person who gave you this link.";
+        $("copy-box").focus(); $("copy-box").select();
+      }
+      return;
+    }
     const data = new URLSearchParams();
     for (const [key, entry] of Object.entries(FORM.fields)) data.append(entry, answers[key]);
     $("send").disabled = true; status.className = "status"; status.textContent = "Sending…";

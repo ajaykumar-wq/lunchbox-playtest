@@ -471,13 +471,13 @@ const FORM = {
       $("loader-text").textContent = msg;
     };
     const script = document.createElement("script");
-    script.src = "Build/Web.loader.js?v=ada6b3e128";
+    script.src = "Build/Web.loader.js?v=6bb664ad79";
     script.onerror = () => fail("The game files didn't load. Reload the page to try again.");
     script.onload = () => {
       createUnityInstance(canvas, {
-        dataUrl: "Build/Web.data.unityweb?v=ada6b3e128",
-        frameworkUrl: "Build/Web.framework.js.unityweb?v=ada6b3e128",
-        codeUrl: "Build/Web.wasm.unityweb?v=ada6b3e128",
+        dataUrl: "Build/Web.data.unityweb?v=6bb664ad79",
+        frameworkUrl: "Build/Web.framework.js.unityweb?v=6bb664ad79",
+        codeUrl: "Build/Web.wasm.unityweb?v=6bb664ad79",
         streamingAssetsUrl: "StreamingAssets",
         companyName: "IICT", productName: "Lunchbox Rush", productVersion: "0.1",
         devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
